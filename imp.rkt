@@ -2,24 +2,29 @@
 
 #lang racket
 
-(define (cmd? c)
+(require math/distributions)
+;https://docs.racket-lang.org/math/dist.html
+
+(define (cmd? c) ;cmd is like a sequence as defined in FairSquare paper
   (match c
-    [`skip #t]
-    [`(set ,x ,(? expr?)) #t]
-    [`(prob-set ,x ,(? dist?)) #t]
-    [`(begin ,(? cmd?) ...) #t]
-    [`(if ,(? expr?) then ,(? cmd?) else ,(? cmd?)) #t]
+    [`skip #t] ;skip
+    [`(set ,x ,(? expr?)) #t] ;set x as an expr (X <- exp)
+    [`(prob-set ,x ,(? distribution?)) #t] ;prob-set x as a dist (X ~ dist)
+    [`(begin ,(? cmd?) ...) #t] ;sequence of cmds
+    [`(if ,(? expr?) then ,(? cmd?) else ,(? cmd?)) #t] ;conditional
     [else #f]))
 
 (define (expr? e)
+  ; "arithmetic expression over variables in V"
+  ; V is set of real-valued variables that can appear in our program 
   (match e
     [(? number?) #t]
-    [(? symbol?) #t]
     [else #f]))
 
-(define (dist? e)
-  (match e
-    [`uniform #t]))
+;(define (dist? e)
+;  (match e
+;    [`uniform #t]
+;    ))
 
 (define example1
   '(if 0 then skip else (set x 1)))
