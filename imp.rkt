@@ -19,6 +19,7 @@
   ; V is set of real-valued variables that can appear in our program 
   (match e
     [(? number?) #t]
+    [(? symbol?) #t]
     [else #f]))
 
 ;(define (dist? e)
@@ -32,6 +33,9 @@
 (define example2
   '(begin (if 1 then (set x 0) else (set x 1)) (set y x)))
 
+(define example3
+  '(begin (if 1 then (prob-set x (normal-dist)) else (prob-set x (beta-dist))) (set y x)))
+
 (define/contract (evaluate cmd environment)
   (cmd? hash? . -> . hash?)
   (display "calling evaluate...\n")
@@ -42,6 +46,7 @@
   (match cmd
     [`skip environment]
     [`(set ,x ,e) (hash-set environment x (eval-expr e environment))]
+    [`(prob-set ,x ,e) (hash-set environment x (eval-dist e environment))]
     [`(begin ,cmds ...)
        (foldl (lambda (next-cmd cur-env) (evaluate next-cmd cur-env))
               environment
@@ -56,6 +61,10 @@
   (match e
     [(? symbol? x) (hash-ref environment x)]
     [(? number? n) n]))
+
+(define (eval-dist e environment)
+  (match e
+    [(? distribution? e) e]))
 
 ; to run...
 ; (evaluate example2 (hash))
