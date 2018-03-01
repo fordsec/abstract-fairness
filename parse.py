@@ -199,6 +199,7 @@ class Encoder(ast.NodeVisitor):
         fprog = node.body[1]
 
         d = initDict(node)
+        self.protected = ['m']
 
         # place holder for max values
         self.gd = d.copy()
@@ -215,7 +216,7 @@ class Encoder(ast.NodeVisitor):
         self.sensitiveAttribute = None
         self.qualified = None
         self.fairnessTarget = None
-
+        self.protected = None 
         self.model = None
         self.program = None
 
@@ -368,14 +369,18 @@ class Encoder(ast.NodeVisitor):
         rhs = node.value
         
     
-        print("LHS VARIABLE: ", lhs)
-        print("ALL VARIABLES IN RHS:")
+        #print("LHS VARIABLE: ", lhs)
+        #print("ALL VARIABLES IN RHS:")
         names = []
         for node in ast.walk(rhs):
             if isName(node):
                 names += [node.id]
-        print(list(set(names)))
-        print("\n")
+                #if a value on the rhs is a protected variable, 
+                #add the lhs to protected
+                if node.id in self.protected: 
+                    self.protected = self.protected + [lhs] 
+        #print(list(set(names)))
+        #print("\n")
         #note (by becky): this approach of collecting nodes of type Name is not 
         #foolproof, bc it does not only grab variable names, it 
         #also grabs names of functions, like Gaussian
@@ -464,21 +469,23 @@ class Encoder(ast.NodeVisitor):
         #print("COND: ", zcond)
         #print("ZT: ", zthen)
         #print("ZELSE: ", zelse)
+        """if node.id in self.protected: 
+                    self.protected = self.protected + [lhs] """
         
         print("ALL VARIABLES IN CONDITIONAL:")
         names = []
         for n in ast.walk(node.test):
             if isName(n):
                 names += [n.id]
-        print(list(set(names)))
+        #print(list(set(names)))
         print("ALL VARIABLES IN BODY:")
         names = []
         #must loop through node.body, bc it is a list
         for v in node.body: 
             for n in ast.walk(v):
                 if isName(n):
-                    names += [n.id]
-        print(list(set(names)))
+                    names += [n.id]   
+        #print(list(set(names)))
         print("ALL VARIABLES IN ELSE:")
         names = []
         #must loop through node.orelse, bc it is a list
@@ -486,8 +493,8 @@ class Encoder(ast.NodeVisitor):
             for n in ast.walk(v):
                 if isName(n):
                     names += [n.id]
-        print(list(set(names)))
-        print("\n")
+        #print(list(set(names)))
+       # print("\n")
 
 
         resT = Implies(zcond, And(zthen, zphiT))
@@ -542,6 +549,7 @@ def F():
     pvars = [x for x in e.vdist]
     print("VDIST:\n", e.vdist)
     print("PHI:\n", phi)
+    print(e.protected)
     #print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
 
 # print codegen.to_source(node)
