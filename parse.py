@@ -199,7 +199,18 @@ class Encoder(ast.NodeVisitor):
         fprog = node.body[1]
 
         d = initDict(node)
-        self.protected = ['m']
+
+        #find the protected attribute(s) to add to self.protected
+        self.protected = []
+        for node in ast.walk(fpop):
+            if isCall(node):
+                if node.func.id == 'sensitiveAttribute':
+                    for new_node in ast.walk(node.args[0]):
+                        if isName(new_node):
+                            self.protected += [new_node.id]
+
+        #set self.affector to an empty list for future use
+        self.affector = []
 
         # place holder for max values
         self.gd = d.copy()
@@ -216,7 +227,9 @@ class Encoder(ast.NodeVisitor):
         self.sensitiveAttribute = None
         self.qualified = None
         self.fairnessTarget = None
-        self.protected = None 
+        self.protected = None #set of protected attributes (we add to this)
+        self.affector = None #state that may be affecting a current node
+
         self.model = None
         self.program = None
 
@@ -362,28 +375,26 @@ class Encoder(ast.NodeVisitor):
         #print("Assign", ast.dump(node))
         #print "POPULATION MODEL: ", self.model
 
-
         assert(len(node.targets) == 1)
 
         lhs = node.targets[0].id
         rhs = node.value
         
-    
-        #print("LHS VARIABLE: ", lhs)
-        #print("ALL VARIABLES IN RHS:")
+        #GOAL : 
+            #if a value on the rhs is a protected variable, 
+            #or if a value in self.affector is a protected variable,
+            #add the lhs to protected
         names = []
         for node in ast.walk(rhs):
             if isName(node):
                 names += [node.id]
-                #if a value on the rhs is a protected variable, 
-                #add the lhs to protected
-                if node.id in self.protected: 
+                isSecret = False
+                checking = sum([1 for x in self.affector+[node.id] if x in self.protected])
+                if checking > 0: 
+                    #if any in self.affector+[node.id] is protected, isSecret = True
+                    isSecret = True
+                if isSecret:
                     self.protected = self.protected + [lhs] 
-        #print(list(set(names)))
-        #print("\n")
-        #note (by becky): this approach of collecting nodes of type Name is not 
-        #foolproof, bc it does not only grab variable names, it 
-        #also grabs names of functions, like Gaussian
 
         # increment SSA ID
 
@@ -457,6 +468,17 @@ class Encoder(ast.NodeVisitor):
         #print "Processing If"
         #print("If", ast.dump(node))
         #print(ast.dump(node.body))
+
+        #all variables mentioned in conditional
+        names = []
+        for n in ast.walk(node.test):
+            if isName(n):
+                names += [n.id]
+
+        #now, add this conditional's variables to self.affector
+        self.affector = self.affector + names
+
+        #now, call doSeq on body/orelse with new self.affector 
         
         zcond = self.exprToZ3(node.test, d)
 
@@ -469,39 +491,15 @@ class Encoder(ast.NodeVisitor):
         #print("COND: ", zcond)
         #print("ZT: ", zthen)
         #print("ZELSE: ", zelse)
-        """if node.id in self.protected: 
-                    self.protected = self.protected + [lhs] """
-        
-        print("ALL VARIABLES IN CONDITIONAL:")
-        names = []
-        for n in ast.walk(node.test):
-            if isName(n):
-                names += [n.id]
-        #print(list(set(names)))
-        print("ALL VARIABLES IN BODY:")
-        names = []
-        #must loop through node.body, bc it is a list
-        for v in node.body: 
-            for n in ast.walk(v):
-                if isName(n):
-                    names += [n.id]   
-        #print(list(set(names)))
-        print("ALL VARIABLES IN ELSE:")
-        names = []
-        #must loop through node.orelse, bc it is a list
-        for v in node.orelse:
-            for n in ast.walk(v):
-                if isName(n):
-                    names += [n.id]
-        #print(list(set(names)))
-       # print("\n")
-
 
         resT = Implies(zcond, And(zthen, zphiT))
         resE = Implies(Not(zcond), And(zelse, zphiE))
         res = And(resT, resE)
 
         #res = And(If(zcond, And(zthen, zphiT), And(zelse, zphiE)))
+
+        #RESET self.affector
+        self.affector = []
 
         return res
 
@@ -531,7 +529,7 @@ def popModel():
     exp = gaussian(10,9)
 
     if m < 10:
-        rank = rank + 5
+        rank = exp + 5
 
     sensitiveAttribute(m > 10)
 
@@ -549,7 +547,7 @@ def F():
     pvars = [x for x in e.vdist]
     print("VDIST:\n", e.vdist)
     print("PHI:\n", phi)
-    print(e.protected)
+    print(set(e.protected))
     #print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
 
 # print codegen.to_source(node)
