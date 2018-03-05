@@ -382,7 +382,6 @@ class Encoder(ast.NodeVisitor):
         lhs = node.targets[0].id
         rhs = node.value
 
-        print(lhs,'\n',self.affector)
         
         #GOAL : 
             #if a value on the rhs is a protected variable, 
@@ -493,7 +492,6 @@ class Encoder(ast.NodeVisitor):
 
         (zphiT, zphiE) = self.createPhiNode(d, dt)
 
-        print(zcond,"\n",self.affector)
 
         #print("COND: ", zcond)
         #print("ZT: ", zthen)
