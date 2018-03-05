@@ -227,8 +227,10 @@ class Encoder(ast.NodeVisitor):
         self.sensitiveAttribute = None
         self.qualified = None
         self.fairnessTarget = None
+
         self.protected = None #set of protected attributes (we add to this)
         self.affector = None #state that may be affecting a current node
+        self.final_return = None
 
         self.model = None
         self.program = None
@@ -379,23 +381,22 @@ class Encoder(ast.NodeVisitor):
 
         lhs = node.targets[0].id
         rhs = node.value
+
+        print(lhs,'\n',self.affector)
         
         #GOAL : 
             #if a value on the rhs is a protected variable, 
             #or if a value in self.affector is a protected variable,
             #add the lhs to protected
-        names = []
+
+        if sum([1 for x in self.affector if x in self.protected]) > 0:
+            self.protected += [lhs]
+
         for node in ast.walk(rhs):
             if isName(node):
-                names += [node.id]
-                isSecret = False
-                checking = sum([1 for x in self.affector+[node.id] if x in self.protected])
-                if checking > 0: 
-                    #if any in self.affector+[node.id] is protected, isSecret = True
-                    isSecret = True
-                if isSecret:
-                    self.protected = self.protected + [lhs] 
-
+                if node.id in self.protected and lhs not in self.protected:
+                    self.protected += [lhs]
+                
         # increment SSA ID
 
         if isCall(rhs):
@@ -429,6 +430,10 @@ class Encoder(ast.NodeVisitor):
 
         elif fn == 'fairnessTarget':
             self.fairnessTarget = self.exprToZ3(node.args[0], d)
+            self.final_return = []
+            for new_node in ast.walk(node.args[0]):
+                if isName(new_node):
+                    self.final_return += [new_node.id]
             return True
 
         else:
@@ -488,6 +493,8 @@ class Encoder(ast.NodeVisitor):
 
         (zphiT, zphiE) = self.createPhiNode(d, dt)
 
+        print(zcond,"\n",self.affector)
+
         #print("COND: ", zcond)
         #print("ZT: ", zthen)
         #print("ZELSE: ", zelse)
@@ -498,8 +505,8 @@ class Encoder(ast.NodeVisitor):
 
         #res = And(If(zcond, And(zthen, zphiT), And(zelse, zphiE)))
 
-        #RESET self.affector
-        self.affector = []
+        #RESET self.affector by removing names
+        self.affector = [x for x in self.affector if x not in names]
 
         return res
 
@@ -529,7 +536,12 @@ def popModel():
     exp = gaussian(10,9)
 
     if m < 10:
-        rank = exp + 5
+        if rank < 20:
+            exp = 1
+        else:
+            exp = 0
+    else:
+        exp = 1
 
     sensitiveAttribute(m > 10)
 
@@ -547,7 +559,12 @@ def F():
     pvars = [x for x in e.vdist]
     print("VDIST:\n", e.vdist)
     print("PHI:\n", phi)
-    print(set(e.protected))
+    print("\nVariables Affected by Initial Sensitive Attribute:\n", set(e.protected))
+    print("Fairness Target Variables Affected by Initial Sensitive Attribute?")
+    if len([x for x in e.protected if x in e.final_return]) > 0:
+        print("TRUE")
+    else:
+        print("FALSE")
     #print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
 
 # print codegen.to_source(node)
